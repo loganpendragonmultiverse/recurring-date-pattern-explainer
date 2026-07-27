@@ -12,7 +12,7 @@ rrule-explain examples/sample.json
 rrule-explain examples/sample.json --format json --output report.json
 ```
 
-The example documents the v1 input shape. Existing report files are never overwritten. Source inputs are read-only except where the documented purpose explicitly creates a new output artifact.
+The example documents the input shape. Version 1.1 correctly preserves month-end intent, clips leap days only when needed, honors interval weeks with `BYDAY`, and supports ISO or RFC 5545 `UNTIL` values with explicit truncation evidence. Preview counts are bounded from 1 to 1,000. Existing report files are never overwritten. Source inputs are read-only except where the documented purpose explicitly creates a new output artifact.
 
 ## Privacy and platforms
 
@@ -20,7 +20,7 @@ The tool runs locally and does not upload input or include telemetry. Python 3.1
 
 ## Interpretation boundary
 
-V1 supports DAILY, WEEKLY, MONTHLY, and YEARLY with INTERVAL, BYDAY, and COUNT. It does not model time zones, DST, or the complete RFC 5545 grammar.
+The supported subset covers DAILY, WEEKLY, MONTHLY, and YEARLY with INTERVAL, BYDAY, COUNT, and UNTIL. It preserves supplied timezone-aware datetimes but does not calculate timezone rules, DST shifts, or the complete RFC 5545 grammar.
 
 ## Development
 

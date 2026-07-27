@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "recurring-date-pattern-explainer"
-version = "1.0.0"
+version = "1.1.0"
 description = "Translate common RRULE recurrence patterns into plain language and preview dates."
 readme = "README.md"
 requires-python = ">=3.10"
