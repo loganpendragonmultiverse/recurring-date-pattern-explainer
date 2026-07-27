@@ -51,3 +51,41 @@ def test_invalid_frequency_and_interval():
         analyze({"rrule": "FREQ=HOURLY", "start": "2026-08-03T09:00:00"})
     with pytest.raises(ValueError, match="INTERVAL"):
         analyze({"rrule": "FREQ=DAILY;INTERVAL=0", "start": "2026-08-03T09:00:00"})
+
+
+def test_month_end_leap_year_week_interval_and_until():
+    monthly = analyze(
+        {"rrule": "FREQ=MONTHLY;COUNT=3", "start": "2027-01-31T09:00:00", "preview_count": 3}
+    )
+    assert monthly["occurrences"] == [
+        "2027-01-31T09:00:00",
+        "2027-02-28T09:00:00",
+        "2027-03-31T09:00:00",
+    ]
+    yearly = analyze(
+        {"rrule": "FREQ=YEARLY;COUNT=2", "start": "2024-02-29T09:00:00", "preview_count": 2}
+    )
+    assert yearly["occurrences"][-1] == "2025-02-28T09:00:00"
+    weekly = analyze(
+        {
+            "rrule": "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO;COUNT=3",
+            "start": "2026-08-03T09:00:00",
+            "preview_count": 3,
+        }
+    )
+    assert weekly["occurrences"][-1] == "2026-08-31T09:00:00"
+    limited = analyze(
+        {
+            "rrule": "FREQ=DAILY;COUNT=10;UNTIL=2026-08-05T09:00:00",
+            "start": "2026-08-03T09:00:00",
+        }
+    )
+    assert len(limited["occurrences"]) == 3
+    assert limited["stopped_by_until"] is True
+
+
+def test_preview_count_and_until_validation():
+    with pytest.raises(ValueError, match="preview_count"):
+        analyze({"rrule": "FREQ=DAILY", "start": "2026-08-03", "preview_count": 0})
+    with pytest.raises(ValueError, match="UNTIL"):
+        analyze({"rrule": "FREQ=DAILY;UNTIL=never", "start": "2026-08-03"})
