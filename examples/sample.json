@@ -1,0 +1,5 @@
+{
+  "rrule": "FREQ=WEEKLY;BYDAY=MO,WE;COUNT=4",
+  "start": "2026-08-03T09:00:00",
+  "preview_count": 4
+}
