@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 import json
 from datetime import datetime, timedelta
+from math import gcd
 from typing import Any
 
 PROJECT = "recurring-date-pattern-explainer"
@@ -16,11 +17,24 @@ def _require(data: dict[str, Any], key: str) -> Any:
 
 
 def _recurrence(data: dict[str, Any]) -> dict[str, Any]:
-    rule = {
-        part.split("=", 1)[0].upper(): part.split("=", 1)[1]
-        for part in str(_require(data, "rrule")).split(";")
-        if "=" in part
-    }
+    raw_rule = _require(data, "rrule")
+    if not isinstance(raw_rule, str):
+        raise ValueError("rrule must be text")  # noqa: TRY004
+    rule: dict[str, str] = {}
+    supported = {"FREQ", "INTERVAL", "BYDAY", "COUNT", "UNTIL"}
+    for fragment in raw_rule.split(";"):
+        if fragment.count("=") != 1:
+            raise ValueError("RRULE fragments must contain exactly one key=value pair")
+        key, value = fragment.split("=")
+        key = key.upper()
+        if key not in supported or not value:
+            raise ValueError("RRULE contains an unsupported key or empty value")
+        if key in rule:
+            raise ValueError("RRULE keys must not be duplicated")
+        rule[key] = value
+    for key in ("INTERVAL", "COUNT"):
+        if key in rule and (not rule[key].isascii() or not rule[key].isdigit()):
+            raise ValueError(f"{key} must be a positive integer")
     frequency = rule.get("FREQ")
     if frequency not in {"DAILY", "WEEKLY", "MONTHLY", "YEARLY"}:
         raise ValueError("supported FREQ values are DAILY, WEEKLY, MONTHLY, and YEARLY")
@@ -61,13 +75,23 @@ def _recurrence(data: dict[str, Any]) -> dict[str, Any]:
         if (until.tzinfo is None) != (start.tzinfo is None):
             raise ValueError("UNTIL and start must use matching timezone awareness")
     weekdays = {"MO": 0, "TU": 1, "WE": 2, "TH": 3, "FR": 4, "SA": 5, "SU": 6}
-    byday = [weekdays[item] for item in rule.get("BYDAY", "").split(",") if item in weekdays]
+    day_names = rule["BYDAY"].split(",") if "BYDAY" in rule else []
+    if any(item not in weekdays for item in day_names):
+        raise ValueError("BYDAY supports only MO,TU,WE,TH,FR,SA,SU without ordinals")
+    byday = [weekdays[item] for item in day_names]
+    unreachable_daily = (
+        frequency == "DAILY"
+        and bool(byday)
+        and not any((day - start.weekday()) % gcd(interval, 7) == 0 for day in byday)
+    )
+    if unreachable_daily and until is None:
+        raise ValueError("BYDAY is unreachable from start with this DAILY INTERVAL")
     occurrences: list[str] = []
     current = start
     desired_day = start.day
     desired_month = start.month
-    stopped_by_until = False
-    while len(occurrences) < count:
+    stopped_by_until = unreachable_daily
+    while len(occurrences) < count and not unreachable_daily:
         if until is not None and current > until:
             stopped_by_until = True
             break
@@ -77,27 +101,38 @@ def _recurrence(data: dict[str, Any]) -> dict[str, Any]:
         )
         if include:
             occurrences.append(current.isoformat())
-        if frequency == "DAILY" or (frequency == "WEEKLY" and byday):
-            current += timedelta(days=1 if frequency == "WEEKLY" else interval)
-        elif frequency == "WEEKLY":
-            current += timedelta(weeks=interval)
-        elif frequency == "MONTHLY":
-            month = current.month - 1 + interval
-            current = current.replace(
-                year=current.year + month // 12,
-                month=month % 12 + 1,
-                day=min(
-                    desired_day,
-                    calendar.monthrange(current.year + month // 12, month % 12 + 1)[1],
-                ),
-            )
-        else:
-            year = current.year + interval
-            current = current.replace(
-                year=year,
-                month=desired_month,
-                day=min(desired_day, calendar.monthrange(year, desired_month)[1]),
-            )
+        if len(occurrences) >= count:
+            break
+        if until is not None and current >= until:
+            stopped_by_until = True
+            break
+        try:
+            if frequency == "DAILY" or (frequency == "WEEKLY" and byday):
+                current += timedelta(days=1 if frequency == "WEEKLY" else interval)
+            elif frequency == "WEEKLY":
+                current += timedelta(weeks=interval)
+            elif frequency == "MONTHLY":
+                month = current.month - 1 + interval
+                current = current.replace(
+                    year=current.year + month // 12,
+                    month=month % 12 + 1,
+                    day=min(
+                        desired_day,
+                        calendar.monthrange(current.year + month // 12, month % 12 + 1)[1],
+                    ),
+                )
+            else:
+                year = current.year + interval
+                current = current.replace(
+                    year=year,
+                    month=desired_month,
+                    day=min(desired_day, calendar.monthrange(year, desired_month)[1]),
+                )
+        except (OverflowError, ValueError) as exc:
+            raise ValueError(
+                "recurrence preview exceeds the supported datetime range; "
+                "reduce COUNT/INTERVAL or use an earlier UNTIL"
+            ) from exc
     phrase = f"Every {(interval if interval > 1 else '')} {frequency.lower().rstrip('ly')}".replace(
         "  ", " "
     )

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "recurring-date-pattern-explainer"
-version = "1.1.0"
+version = "1.1.1"
 description = "Translate common RRULE recurrence patterns into plain language and preview dates."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -35,3 +35,6 @@ omit = ["src/*/__main__.py"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=recurrence_explainer --cov-branch --cov-report=term-missing --cov-fail-under=90"
+
+[tool.setuptools.data-files]
+"share/doc/recurring-date-pattern-explainer" = ["README.md", "CHANGELOG.md", "DEVELOPMENT.md", "TESTING.md"]
