@@ -9,3 +9,5 @@ RRULE parsing rejects unknown keys, duplicate keys (case-insensitively), empty o
 Regression tests use synthetic inputs and disposable trees. Run the complete suite and inspect built wheel/source documentation before preparing a draft PR.
 
 DAILY rules now check weekday reachability using gcd(INTERVAL, 7) before iteration. An unreachable BYDAY without UNTIL fails with an actionable error rather than iterating until datetime overflow; with UNTIL it returns an empty, explicitly truncated preview. Reachable daily rules retain their existing dates. This correction does not extend the supported RFC or DST subset.
+
+Preview generation stops before advancing once COUNT, preview_count or the inclusive UNTIL boundary has been satisfied. Remaining advances outside Python datetime's supported range fail with an actionable error and produce no CLI output file, including very large intervals. A one-result preview at 9999-12-31 remains valid.

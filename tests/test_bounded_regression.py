@@ -58,3 +58,39 @@ def test_reachable_daily_weekdays_and_until_behavior_are_preserved():
         {"rrule": "FREQ=DAILY;INTERVAL=7;BYDAY=TU;UNTIL=2026-11-01", "start": "2026-10-19"}
     )
     assert limited["occurrences"] == [] and limited["stopped_by_until"]
+
+
+@pytest.mark.parametrize("frequency", ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"])
+def test_completed_preview_at_maximum_date_does_not_advance(frequency):
+    result = analyze({"rrule": f"FREQ={frequency};COUNT=1", "start": "9999-12-31T09:00:00"})
+    assert result["occurrences"] == ["9999-12-31T09:00:00"]
+
+
+@pytest.mark.parametrize("frequency", ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"])
+def test_remaining_date_range_overflow_is_actionable(frequency):
+    with pytest.raises(ValueError, match="supported datetime range"):
+        analyze(
+            {
+                "rrule": f"FREQ={frequency};INTERVAL=999999999999999999;COUNT=2",
+                "start": "2026-10-19T09:00:00",
+            }
+        )
+
+
+def test_until_at_maximum_date_stops_before_advance():
+    report = analyze({"rrule": "FREQ=DAILY;UNTIL=9999-12-31", "start": "9999-12-31"})
+    assert report["occurrences"] == ["9999-12-31T00:00:00"]
+    assert report["stopped_by_until"]
+
+
+def test_cli_date_overflow_has_no_output(tmp_path, capsys):
+    source, output = tmp_path / "input.json", tmp_path / "report.json"
+    source.write_text(
+        json.dumps(
+            {"rrule": "FREQ=DAILY;INTERVAL=999999999999999999;COUNT=2", "start": "2026-10-19"}
+        )
+    )
+    assert main([str(source), "--output", str(output)]) == 2
+    captured = capsys.readouterr()
+    assert "supported datetime range" in captured.err and not captured.out
+    assert not output.exists()

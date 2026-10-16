@@ -101,27 +101,38 @@ def _recurrence(data: dict[str, Any]) -> dict[str, Any]:
         )
         if include:
             occurrences.append(current.isoformat())
-        if frequency == "DAILY" or (frequency == "WEEKLY" and byday):
-            current += timedelta(days=1 if frequency == "WEEKLY" else interval)
-        elif frequency == "WEEKLY":
-            current += timedelta(weeks=interval)
-        elif frequency == "MONTHLY":
-            month = current.month - 1 + interval
-            current = current.replace(
-                year=current.year + month // 12,
-                month=month % 12 + 1,
-                day=min(
-                    desired_day,
-                    calendar.monthrange(current.year + month // 12, month % 12 + 1)[1],
-                ),
-            )
-        else:
-            year = current.year + interval
-            current = current.replace(
-                year=year,
-                month=desired_month,
-                day=min(desired_day, calendar.monthrange(year, desired_month)[1]),
-            )
+        if len(occurrences) >= count:
+            break
+        if until is not None and current >= until:
+            stopped_by_until = True
+            break
+        try:
+            if frequency == "DAILY" or (frequency == "WEEKLY" and byday):
+                current += timedelta(days=1 if frequency == "WEEKLY" else interval)
+            elif frequency == "WEEKLY":
+                current += timedelta(weeks=interval)
+            elif frequency == "MONTHLY":
+                month = current.month - 1 + interval
+                current = current.replace(
+                    year=current.year + month // 12,
+                    month=month % 12 + 1,
+                    day=min(
+                        desired_day,
+                        calendar.monthrange(current.year + month // 12, month % 12 + 1)[1],
+                    ),
+                )
+            else:
+                year = current.year + interval
+                current = current.replace(
+                    year=year,
+                    month=desired_month,
+                    day=min(desired_day, calendar.monthrange(year, desired_month)[1]),
+                )
+        except (OverflowError, ValueError) as exc:
+            raise ValueError(
+                "recurrence preview exceeds the supported datetime range; "
+                "reduce COUNT/INTERVAL or use an earlier UNTIL"
+            ) from exc
     phrase = f"Every {(interval if interval > 1 else '')} {frequency.lower().rstrip('ly')}".replace(
         "  ", " "
     )
