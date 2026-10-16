@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 import json
 from datetime import datetime, timedelta
+from math import gcd
 from typing import Any
 
 PROJECT = "recurring-date-pattern-explainer"
@@ -78,12 +79,19 @@ def _recurrence(data: dict[str, Any]) -> dict[str, Any]:
     if any(item not in weekdays for item in day_names):
         raise ValueError("BYDAY supports only MO,TU,WE,TH,FR,SA,SU without ordinals")
     byday = [weekdays[item] for item in day_names]
+    unreachable_daily = (
+        frequency == "DAILY"
+        and bool(byday)
+        and not any((day - start.weekday()) % gcd(interval, 7) == 0 for day in byday)
+    )
+    if unreachable_daily and until is None:
+        raise ValueError("BYDAY is unreachable from start with this DAILY INTERVAL")
     occurrences: list[str] = []
     current = start
     desired_day = start.day
     desired_month = start.month
-    stopped_by_until = False
-    while len(occurrences) < count:
+    stopped_by_until = unreachable_daily
+    while len(occurrences) < count and not unreachable_daily:
         if until is not None and current > until:
             stopped_by_until = True
             break

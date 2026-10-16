@@ -39,3 +39,22 @@ def test_invalid_rule_fails_before_iteration_or_output(rule, tmp_path, capsys):
     captured = capsys.readouterr()
     assert not captured.out and "error:" in captured.err
     assert not output.exists()
+
+
+@pytest.mark.parametrize("interval", [7, 14, 21])
+def test_unreachable_daily_weekday_fails_before_iteration(interval):
+    with pytest.raises(ValueError, match="BYDAY.*unreachable"):
+        analyze(
+            {"rrule": f"FREQ=DAILY;INTERVAL={interval};BYDAY=TU", "start": "2026-10-19T09:00:00"}
+        )
+
+
+def test_reachable_daily_weekdays_and_until_behavior_are_preserved():
+    result = analyze(
+        {"rrule": "FREQ=DAILY;INTERVAL=7;BYDAY=MO;COUNT=2", "start": "2026-10-19T09:00:00"}
+    )
+    assert result["occurrences"] == ["2026-10-19T09:00:00", "2026-10-26T09:00:00"]
+    limited = analyze(
+        {"rrule": "FREQ=DAILY;INTERVAL=7;BYDAY=TU;UNTIL=2026-11-01", "start": "2026-10-19"}
+    )
+    assert limited["occurrences"] == [] and limited["stopped_by_until"]
