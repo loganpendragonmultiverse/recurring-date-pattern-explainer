@@ -14,6 +14,47 @@ rrule-explain examples/sample.json --format json --output report.json
 
 The example documents the input shape. Version 1.1 correctly preserves month-end intent, clips leap days only when needed, honors interval weeks with `BYDAY`, and supports ISO or RFC 5545 `UNTIL` values with explicit truncation evidence. Preview counts are bounded from 1 to 1,000. Existing report files are never overwritten. Source inputs are read-only except where the documented purpose explicitly creates a new output artifact.
 
+## Input and date semantics
+
+Input must be a JSON object with text `start` (an ISO date or datetime) and text
+`rrule`. Optional `preview_count` is an integer from 1 to 1,000, default 10;
+strings, booleans and fractional numbers are rejected. `COUNT` further limits
+that preview. Unknown RRULE keys and duplicate keys are errors.
+
+Weeks with `BYDAY` use seven-day blocks anchored to `start`, rather than RFC
+Monday week boundaries. For example, Wednesday 2026-10-21 with
+`FREQ=WEEKLY;INTERVAL=2;BYDAY=MO;COUNT=3` previews October 26, November 9 and
+November 23. Monthly and yearly rules advance the original day of month,
+clipping only when necessary (January 31 → February 28 → March 31).
+`BYDAY` filters those monthly/yearly dates; it does not expand all matching
+weekdays in each month or year. An unsatisfiable filter without `UNTIL` fails
+at the supported datetime boundary rather than returning a partial report.
+
+`UNTIL` is inclusive. A date-only value means midnight, so a later time on
+that date is excluded. Start and UNTIL must both be timezone-aware or both
+naive; fixed offsets are preserved, without named-zone or DST calculations.
+This is a deterministic preview subset, not an RFC-complete calendar engine.
+
+## Installing a release
+
+Download the wheel from the GitHub release, then install the actual downloaded
+filename with `python -m pip install /path/to/the-downloaded.whl`. The command
+`rrule-explain --help` verifies installation. A minimal input file is:
+
+```json
+{"start": "2026-10-21", "rrule": "FREQ=DAILY;COUNT=3"}
+```
+
+Save it as `input.json` and run `rrule-explain input.json --format json`.
+Wheel installs include the four project documents, license, contribution guide
+and sample under `share/doc/recurring-date-pattern-explainer` in the Python
+environment. Source archives include those documents and `examples/sample.json`.
+
+Reports require a new output path. Existing files, directories and symlinks are
+refused, including a path pointing to the input. Errors return status 2;
+invalid input produces no report. A failed write can leave a partial new file,
+which should be inspected before sharing. Closed output pipes fail cleanly.
+
 ## Privacy and platforms
 
 The tool runs locally and does not upload input or include telemetry. Python 3.10 or newer is supported on Windows, macOS, and Linux.
