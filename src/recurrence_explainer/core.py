@@ -41,8 +41,13 @@ def _recurrence(data: dict[str, Any]) -> dict[str, Any]:
     interval = int(rule.get("INTERVAL", "1"))
     if interval < 1:
         raise ValueError("INTERVAL must be positive")
-    start = datetime.fromisoformat(str(_require(data, "start")))
-    preview_count = int(data.get("preview_count", 10))
+    raw_start = _require(data, "start")
+    if not isinstance(raw_start, str):
+        raise ValueError("start must be ISO date/datetime text")  # noqa: TRY004
+    start = datetime.fromisoformat(raw_start)
+    preview_count = data.get("preview_count", 10)
+    if type(preview_count) is not int:
+        raise ValueError("preview_count must be an integer")
     if not 1 <= preview_count <= 1000:
         raise ValueError("preview_count must be between 1 and 1000")
     count = min(int(rule.get("COUNT", preview_count)), preview_count)
@@ -107,10 +112,19 @@ def _recurrence(data: dict[str, Any]) -> dict[str, Any]:
             stopped_by_until = True
             break
         try:
-            if frequency == "DAILY" or (frequency == "WEEKLY" and byday):
-                current += timedelta(days=1 if frequency == "WEEKLY" else interval)
-            elif frequency == "WEEKLY":
-                current += timedelta(weeks=interval)
+            if frequency in {"DAILY", "WEEKLY"}:
+                advance_days = interval if frequency == "DAILY" else 7 * interval
+                if frequency == "WEEKLY" and byday:
+                    positions = sorted({(day - start.weekday()) % 7 for day in byday})
+                    position = (current.date() - start.date()).days % 7
+                    later = [day for day in positions if day > position]
+                    advance_days = (
+                        later[0] - position if later else 7 * interval - position + positions[0]
+                    )
+                if until is not None and advance_days > (until - current).days:
+                    stopped_by_until = True
+                    break
+                current += timedelta(days=advance_days)
             elif frequency == "MONTHLY":
                 month = current.month - 1 + interval
                 current = current.replace(
@@ -133,9 +147,8 @@ def _recurrence(data: dict[str, Any]) -> dict[str, Any]:
                 "recurrence preview exceeds the supported datetime range; "
                 "reduce COUNT/INTERVAL or use an earlier UNTIL"
             ) from exc
-    phrase = f"Every {(interval if interval > 1 else '')} {frequency.lower().rstrip('ly')}".replace(
-        "  ", " "
-    )
+    unit = {"DAILY": "day", "WEEKLY": "week", "MONTHLY": "month", "YEARLY": "year"}[frequency]
+    phrase = f"Every {interval} {unit}s" if interval > 1 else f"Every {unit}"
     if byday:
         phrase += " on " + ", ".join((name for name, number in weekdays.items() if number in byday))
     if until is not None:
@@ -152,6 +165,8 @@ def _recurrence(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def analyze(data: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("input must be a JSON object")  # noqa: TRY004
     return {"version": 1, "project": PROJECT, **_recurrence(data)}
 
 
